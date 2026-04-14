@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>TaskPay Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta19/dist/css/tabler.min.css"/>
+  <style>
+    .task-card { transition: box-shadow .2s; }
+    .task-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); }
+    .points-badge { font-size: 1.1rem; font-weight: 700; color: #206bc4; }
+    .type-badge { font-size: .7rem; }
+    #pointsDisplay { font-size: 2.5rem; font-weight: 800; color: #206bc4; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <!-- Navbar -->
+  <header class="navbar navbar-expand-md navbar-light d-print-none">
+    <div class="container-xl">
+      <a href="/" class="navbar-brand fw-bold text-primary">💰 TaskPay</a>
+      <div class="navbar-nav flex-row order-md-last ms-auto align-items-center gap-3">
+        <span class="text-muted">Hi, <strong id="navUsername">...</strong></span>
+        <span class="badge bg-blue-lt fs-6" id="navPoints">0 pts</span>
+        <button class="btn btn-sm btn-outline-danger" onclick="logout()">Sign Out</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-wrapper">
+    <div class="container-xl py-4">
+
+      <!-- Stats row -->
+      <div class="row g-3 mb-4">
+        <div class="col-sm-4">
+          <div class="card text-center p-3">
+            <div id="pointsDisplay">0</div>
+            <div class="text-muted small">Points Balance</div>
+            <div class="text-muted small mt-1" id="dollarValue">= $0.00</div>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:800;color:#2fb344" id="tasksCompleted">0</div>
+            <div class="text-muted small">Tasks Completed</div>
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="card text-center p-3">
+            <div style="font-size:2rem;font-weight:800;color:#e67e22" id="withdrawTotal">$0.00</div>
+            <div class="text-muted small">Total Withdrawn</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <ul class="nav nav-tabs mb-4" id="mainTabs">
+        <li class="nav-item"><a class="nav-link active" href="#" data-section="tasks">📋 Tasks</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-section="withdraw">💸 Withdraw</a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-section="history">📜 History</a></li>
+      </ul>
+
+      <!-- TASKS SECTION -->
+      <div id="section-tasks">
+        <div class="row g-3" id="taskGrid">
+          <div class="col-12 text-center text-muted py-5">Loading tasks...</div>
+        </div>
+      </div>
+
+      <!-- WITHDRAW SECTION -->
+      <div id="section-withdraw" class="d-none">
+        <div class="row justify-content-center">
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title">Request Withdrawal</h3></div>
+              <div class="card-body">
+                <div id="withdrawAlert" class="alert d-none mb-3"></div>
+                <p class="text-muted">100 points = $1.00 · Minimum: 500 points ($5.00)</p>
+                <form id="withdrawForm">
+                  <div class="mb-3">
+                    <label class="form-label">Points to Redeem</label>
+                    <input type="number" class="form-control" id="withdrawPoints" min="500" step="100" placeholder="e.g. 500" required/>
+                    <small class="text-muted" id="withdrawCalc"></small>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">PayPal Email</label>
+                    <input type="email" class="form-control" id="withdrawPaypal" placeholder="your@paypal.com" required/>
+                  </div>
+                  <button type="submit" class="btn btn-success w-100">Submit Withdrawal Request</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTORY SECTION -->
+      <div id="section-history" class="d-none">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title">Withdrawal History</h3></div>
+          <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+              <thead><tr><th>Date</th><th>Points</th><th>Amount</th><th>PayPal</th><th>Status</th><th>Note</th></tr></thead>
+              <tbody id="historyTable"><tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta19/dist/js/tabler.min.js"></script>
+<script>
+  const token = localStorage.getItem('tp_token');
+  if (!token) window.location.href = '/';
+
+  const user = JSON.parse(localStorage.getItem('tp_user') || '{}');
+  document.getElementById('navUsername').textContent = user.username || 'User';
+
+  const api = (url, opts = {}) => fetch(url, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...opts.headers }
+  }).then(r => r.json());
+
+  function logout() {
+    localStorage.removeItem('tp_token');
+    localStorage.removeItem('tp_user');
+    window.location.href = '/';
+  }
+
+  function updateStats(points, completed, withdrawn) {
+    document.getElementById('pointsDisplay').textContent = points.toLocaleString();
+    document.getElementById('navPoints').textContent = `${points.toLocaleString()} pts`;
+    document.getElementById('dollarValue').textContent = `= $${(points / 100).toFixed(2)}`;
+    if (completed !== undefined) document.getElementById('tasksCompleted').textContent = completed;
+    if (withdrawn !== undefined) document.getElementById('withdrawTotal').textContent = `$${withdrawn.toFixed(2)}`;
+  }
+
+  const TASK_COLORS = { SURVEY: 'bg-blue-lt', ANDROID: 'bg-green-lt', IOS: 'bg-gray-lt', DOWNLOAD: 'bg-orange-lt', SIGNUP: 'bg-purple-lt' };
+
+  async function loadTasks() {
+    const tasks = await api('/api/tasks');
+    const grid = document.getElementById('taskGrid');
+    if (!tasks.length) { grid.innerHTML = '<div class="col-12 text-center text-muted py-5">No tasks available right now.</div>'; return; }
+
+    let completed = 0;
+    grid.innerHTML = tasks.map(t => {
+      if (t.completedAt) completed++;
+      const done = !!t.completedAt;
+      const clicked = !!t.clickedAt && !done;
+      return `
+        <div class="col-md-6 col-lg-4">
+          <div class="card task-card h-100 ${done ? 'border-success' : ''}">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="badge type-badge ${TASK_COLORS[t.type] || 'bg-secondary-lt'}">${t.type}</span>
+                <span class="points-badge">+${t.points} pts</span>
+              </div>
+              <h4 class="card-title">${t.title}</h4>
+              <p class="text-muted small">${t.description}</p>
+            </div>
+            <div class="card-footer">
+              ${done
+                ? `<button class="btn btn-success btn-sm w-100" disabled>✓ Completed</button>`
+                : clicked
+                  ? t.canComplete
+                    ? `<button class="btn btn-primary btn-sm w-100" onclick="completeTask(${t.id}, this)">✅ Mark as Done (+${t.points} pts)</button>`
+                    : `<button class="btn btn-outline-secondary btn-sm w-100" disabled id="wait-${t.id}">⏳ Verifying...</button>`
+                  : `<a href="${t.url}" target="_blank" class="btn btn-outline-primary btn-sm w-100" onclick="clickTask(${t.id})">🔗 Start Task</a>`
+              }
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('tasksCompleted').textContent = completed;
+  }
+
+  async function clickTask(id) {
+    await api(`/api/tasks/${id}/click`, { method: 'POST' });
+    setTimeout(() => loadTasks(), 31000);
+  }
+
+  async function completeTask(id, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+    const res = await api(`/api/tasks/${id}/complete`, { method: 'POST' });
+    if (res.points !== undefined) {
+      updateStats(res.points);
+      loadTasks();
+    } else {
+      btn.disabled = false;
+      btn.textContent = res.error || 'Try again';
+    }
+  }
+
+  async function loadMe() {
+    const me = await api('/api/auth/me');
+    if (me.id) updateStats(me.points);
+  }
+
+  async function loadHistory() {
+    const ws = await api('/api/withdrawals');
+    const tbody = document.getElementById('historyTable');
+    if (!ws.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No withdrawals yet.</td></tr>'; return; }
+    const totalApproved = ws.filter(w => w.status === 'APPROVED').reduce((s, w) => s + w.amount, 0);
+    document.getElementById('withdrawTotal').textContent = `$${totalApproved.toFixed(2)}`;
+    const statusColors = { PENDING: 'warning', APPROVED: 'success', REJECTED: 'danger' };
+    tbody.innerHTML = ws.map(w => `
+      <tr>
+        <td>${new Date(w.createdAt).toLocaleDateString()}</td>
+        <td>${w.points.toLocaleString()}</td>
+        <td>$${w.amount.toFixed(2)}</td>
+        <td class="text-muted small">${w.paypalEmail}</td>
+        <td><span class="badge bg-${statusColors[w.status]}-lt text-${statusColors[w.status]}">${w.status}</span></td>
+        <td class="text-muted small">${w.adminNote || '—'}</td>
+      </tr>`).join('');
+  }
+
+  // Tab switching
+  document.querySelectorAll('[data-section]').forEach(tab => {
+    tab.addEventListener('click', e => {
+      e.preventDefault();
+      document.querySelectorAll('[data-section]').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      ['tasks','withdraw','history'].forEach(s => {
+        document.getElementById(`section-${s}`).classList.toggle('d-none', s !== tab.dataset.section);
+      });
+      if (tab.dataset.section === 'history') loadHistory();
+    });
+  });
+
+  // Withdraw calc
+  document.getElementById('withdrawPoints').addEventListener('input', e => {
+    const pts = parseInt(e.target.value) || 0;
+    document.getElementById('withdrawCalc').textContent = pts >= 500 ? `= $${(pts/100).toFixed(2)}` : 'Minimum 500 points';
+  });
+
+  document.getElementById('withdrawForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const pts = parseInt(document.getElementById('withdrawPoints').value);
+    const email = document.getElementById('withdrawPaypal').value;
+    const box = document.getElementById('withdrawAlert');
+    const res = await api('/api/withdrawals', { method: 'POST', body: JSON.stringify({ points: pts, paypalEmail: email }) });
+    box.className = `alert alert-${res.message ? 'success' : 'danger'} mb-3`;
+    box.textContent = res.message || res.error;
+    if (res.message) { loadMe(); document.getElementById('withdrawForm').reset(); }
+  });
+
+  loadTasks();
+  loadMe();
+</script>
+</body>
+</html>
